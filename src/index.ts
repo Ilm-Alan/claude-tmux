@@ -42,6 +42,12 @@ function isBusy(output: string): boolean {
   return false;
 }
 
+function isDone(output: string): boolean {
+  // Claude shows "✻ [verb] for [duration]" when task completes
+  // e.g., "✻ Baked for 1m 35s", "✻ Cogitated for 2m 10s"
+  return /✻\s+\w+\s+for\s+\d+[ms]/.test(output);
+}
+
 function filterUIChrome(output: string): string {
   const lines = output.split('\n');
   const filtered = lines.filter(line => {
@@ -58,10 +64,10 @@ function filterUIChrome(output: string): string {
 
 async function waitForIdle(session: string): Promise<string> {
   const timeout = 600000; // 10 minutes
-  const lines = 50;
+  const lines = 100; // Capture more lines to catch done signal
   const startTime = Date.now();
   let lastOutput = "";
-  let stableCount = 0;
+  let idleCount = 0;
 
   while (Date.now() - startTime < timeout) {
     await sleep(2000);
@@ -69,15 +75,25 @@ async function waitForIdle(session: string): Promise<string> {
     try {
       const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
 
-      // If busy, keep waiting
+      // If busy, reset idle count and keep waiting
       if (isBusy(output)) {
         lastOutput = output;
-        stableCount = 0;
+        idleCount = 0;
         continue;
       }
 
-      // Not busy - return
-      return filterUIChrome(output);
+      // Check for positive done signal
+      if (isDone(output)) {
+        return filterUIChrome(output);
+      }
+
+      // Not busy but no done signal - use settling delay
+      // Require 2 consecutive idle checks (4 seconds) before returning
+      idleCount++;
+      if (idleCount >= 2) {
+        return filterUIChrome(output);
+      }
+      lastOutput = output;
     } catch (e: any) {
       return `Error: ${e.message}`;
     }
