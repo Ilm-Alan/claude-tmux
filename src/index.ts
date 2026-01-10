@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execSync } from "child_process";
-import { writeFileSync } from "fs";
+import { writeFileSync, appendFileSync } from "fs";
 
 const SESSION_PREFIX = "claude-";
 
@@ -79,12 +79,18 @@ async function waitForIdle(session: string): Promise<string> {
   const startTime = Date.now();
   let lastOutput = "";
   let stableCount = 0;
+  let iterations = 0;
 
   while (Date.now() - startTime < timeout) {
     await sleep(2000);
+    iterations++;
 
     try {
       const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
+      const busy = isClearlBusy(output);
+
+      // Debug: write to file so we can see what's happening
+      appendFileSync('/tmp/claude-tmux-debug.log', `[${new Date().toISOString()}] iteration=${iterations} busy=${busy} outputLen=${output.length}\n`);
 
       // If clearly busy, never return early
       if (isClearlBusy(output)) {
