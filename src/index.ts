@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execSync } from "child_process";
-import { writeFileSync, appendFileSync } from "fs";
+import { writeFileSync } from "fs";
 
 const SESSION_PREFIX = "claude-";
 
@@ -27,7 +27,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function isClaudeIdle(output: string): boolean {
+function isBusy(output: string): boolean {
   // Claude shows these patterns when actively working
   const busyPatterns = [
     'ctrl+c to interrupt',
@@ -36,12 +36,10 @@ function isClaudeIdle(output: string): boolean {
 
   for (const pattern of busyPatterns) {
     if (output.includes(pattern)) {
-      return false;
+      return true;
     }
   }
-
-  // Not clearly busy - considered idle
-  return true;
+  return false;
 }
 
 function filterUIChrome(output: string): string {
@@ -58,62 +56,28 @@ function filterUIChrome(output: string): string {
   return filtered.join('\n').trim();
 }
 
-function isClearlBusy(output: string): boolean {
-  // These patterns definitively mean Claude is still working
-  const definitelyBusy = [
-    'ctrl+c to interrupt',
-    'esc to interrupt',
-  ];
-
-  for (const pattern of definitelyBusy) {
-    if (output.includes(pattern)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 async function waitForIdle(session: string): Promise<string> {
   const timeout = 600000; // 10 minutes
   const lines = 50;
   const startTime = Date.now();
   let lastOutput = "";
   let stableCount = 0;
-  let iterations = 0;
 
   while (Date.now() - startTime < timeout) {
     await sleep(2000);
-    iterations++;
 
     try {
       const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
-      const busy = isClearlBusy(output);
 
-      // Debug: write to file so we can see what's happening
-      appendFileSync('/tmp/claude-tmux-debug.log', `[${new Date().toISOString()}] iteration=${iterations} busy=${busy} outputLen=${output.length}\n`);
-
-      // If clearly busy, never return early
-      if (isClearlBusy(output)) {
+      // If busy, keep waiting
+      if (isBusy(output)) {
         lastOutput = output;
         stableCount = 0;
         continue;
       }
 
-      // If idle, return
-      if (isClaudeIdle(output)) {
-        return filterUIChrome(output);
-      }
-
-      // Fallback: if output is stable for 6 seconds and not clearly busy, return
-      if (output === lastOutput) {
-        stableCount++;
-        if (stableCount >= 3) {
-          return filterUIChrome(output);
-        }
-      } else {
-        stableCount = 0;
-        lastOutput = output;
-      }
+      // Not busy - return
+      return filterUIChrome(output);
     } catch (e: any) {
       return `Error: ${e.message}`;
     }
