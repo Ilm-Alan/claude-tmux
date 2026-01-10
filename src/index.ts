@@ -28,9 +28,33 @@ function sleep(ms: number): Promise<void> {
 }
 
 function isClaudeIdle(output: string): boolean {
-  if (output.includes('esc to interrupt')) {
-    return false;
+  // Claude shows these patterns when actively working
+  const busyPatterns = [
+    'ctrl+c to interrupt',
+    'esc to interrupt',
+    'Manifesting',
+    'Cultivating',
+    'Synthesizing',
+    'Generating',
+    'Thinking',
+  ];
+
+  for (const pattern of busyPatterns) {
+    if (output.includes(pattern)) {
+      return false;
+    }
   }
+
+  // Also check if Claude is waiting at a prompt (idle)
+  // The prompt usually ends with "❯" on its own line
+  const lines = output.trim().split('\n');
+  const lastLine = lines[lines.length - 1]?.trim() || '';
+
+  // If we see the prompt character, Claude is idle and waiting
+  if (lastLine.startsWith('❯') || lastLine === '❯') {
+    return true;
+  }
+
   return true;
 }
 
@@ -48,6 +72,21 @@ function filterUIChrome(output: string): string {
   return filtered.join('\n').trim();
 }
 
+function isClearlBusy(output: string): boolean {
+  // These patterns definitively mean Claude is still working
+  const definitelyBusy = [
+    'ctrl+c to interrupt',
+    'esc to interrupt',
+  ];
+
+  for (const pattern of definitelyBusy) {
+    if (output.includes(pattern)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function waitForIdle(session: string): Promise<string> {
   const timeout = 600000; // 10 minutes
   const lines = 50;
@@ -61,10 +100,19 @@ async function waitForIdle(session: string): Promise<string> {
     try {
       const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
 
+      // If clearly busy, never return early
+      if (isClearlBusy(output)) {
+        lastOutput = output;
+        stableCount = 0;
+        continue;
+      }
+
+      // If idle, return
       if (isClaudeIdle(output)) {
         return filterUIChrome(output);
       }
 
+      // Fallback: if output is stable for 6 seconds and not clearly busy, return
       if (output === lastOutput) {
         stableCount++;
         if (stableCount >= 3) {
