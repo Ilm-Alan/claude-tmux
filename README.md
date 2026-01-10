@@ -1,5 +1,7 @@
 # claude-tmux
 
+[![npm version](https://img.shields.io/npm/v/claude-tmux.svg)](https://www.npmjs.com/package/claude-tmux)
+
 MCP server for orchestrating multiple Claude Code instances via tmux.
 
 ## Installation
