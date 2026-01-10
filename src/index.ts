@@ -32,11 +32,6 @@ function isClaudeIdle(output: string): boolean {
   const busyPatterns = [
     'ctrl+c to interrupt',
     'esc to interrupt',
-    'Manifesting',
-    'Cultivating',
-    'Synthesizing',
-    'Generating',
-    'Thinking',
   ];
 
   for (const pattern of busyPatterns) {
@@ -45,16 +40,7 @@ function isClaudeIdle(output: string): boolean {
     }
   }
 
-  // Also check if Claude is waiting at a prompt (idle)
-  // The prompt usually ends with "❯" on its own line
-  const lines = output.trim().split('\n');
-  const lastLine = lines[lines.length - 1]?.trim() || '';
-
-  // If we see the prompt character, Claude is idle and waiting
-  if (lastLine.startsWith('❯') || lastLine === '❯') {
-    return true;
-  }
-
+  // Not clearly busy - considered idle
   return true;
 }
 
