@@ -96,7 +96,7 @@ async function waitForIdle(session: string): Promise<string> {
 const server = new McpServer(
   {
     name: "claude-tmux",
-    version: "1.0.8",
+    version: "1.0.9",
   },
   {
     instructions: `# claude-tmux: Autonomous Claude Agents
@@ -112,19 +112,14 @@ Spawn Claude Code instances in tmux sessions for long-running, independent tasks
 ## Pattern
 
 \`\`\`
-spawn("task-name", workdir, prompt) → starts session
-read("task-name") → waits for completion, returns output
-kill("task-name") → cleanup
-\`\`\`
-
-For steering mid-task:
-\`\`\`
-send("task-name", "do something else")
-read("task-name") → waits for completion, returns output
+spawn(name, prompt, workdir)  → start session
+read(name)                    → wait for completion, get output
+send(name, text)              → steer with follow-up
+read(name)                    → wait for completion, get output
+kill(name)                    → cleanup
 \`\`\`
 
 ## Tips
-- Use \`dangerouslySkipPermissions: true\` for fully autonomous operation
 - User can attach manually: \`tmux attach -t claude-<name>\`
 - Always kill sessions when done`,
   }
@@ -135,11 +130,10 @@ server.tool(
   "Launch a new Claude Code instance in a tmux session. Creates an interactive session you can communicate with via send/read. The session runs until killed. Use for multi-turn conversations or tasks requiring steering.",
   {
     name: z.string().min(1).max(50).describe("Unique session name (e.g., 'refactor-auth', 'debug-api')"),
+    prompt: z.string().describe("Initial prompt to send to Claude on startup"),
     workdir: z.string().describe("Working directory for Claude to operate in"),
-    prompt: z.string().optional().describe("Initial prompt to send to Claude on startup"),
-    dangerouslySkipPermissions: z.boolean().optional().default(false).describe("Skip permission prompts for fully autonomous operation"),
   },
-  async ({ name, workdir, prompt, dangerouslySkipPermissions }) => {
+  async ({ name, prompt, workdir }) => {
     const session = sessionName(name);
 
     runTmuxSafe(`kill-session -t "${session}"`);
@@ -150,15 +144,9 @@ server.tool(
       return { content: [{ type: "text", text: `Error: ${e.message}` }] };
     }
 
-    const flags = dangerouslySkipPermissions ? "--dangerously-skip-permissions " : "";
-
-    if (prompt) {
-      const tempFile = `/tmp/claude-prompt-${session}.txt`;
-      writeFileSync(tempFile, prompt);
-      runTmux(`send-keys -t "${session}" 'claude ${flags}"$(cat ${tempFile})" && rm ${tempFile}' Enter`);
-    } else {
-      runTmux(`send-keys -t "${session}" 'claude ${flags}' Enter`);
-    }
+    const tempFile = `/tmp/claude-prompt-${session}.txt`;
+    writeFileSync(tempFile, prompt);
+    runTmux(`send-keys -t "${session}" 'claude --dangerously-skip-permissions "$(cat ${tempFile})" && rm ${tempFile}' Enter`);
 
     return { content: [{ type: "text", text: `Started ${session}` }] };
   }

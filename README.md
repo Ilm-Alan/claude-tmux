@@ -31,13 +31,12 @@ Add to your Claude Code MCP settings:
 Launch a new Claude Code instance in a tmux session.
 
 ```
-spawn("task-name", workdir, prompt)
+spawn(name, prompt, workdir)
 ```
 
 - `name`: Unique session name (e.g., 'refactor-auth', 'debug-api')
+- `prompt`: Initial prompt to send to Claude
 - `workdir`: Working directory for Claude to operate in
-- `prompt`: Initial prompt to send to Claude on startup
-- `dangerouslySkipPermissions`: Skip permission prompts for fully autonomous operation
 
 ### read
 
@@ -66,15 +65,14 @@ kill("task-name")
 ## Usage Pattern
 
 ```
-spawn("task-name", workdir, prompt)  → start session
-read("task-name")                    → wait for completion, get output
-send("task-name", "now do this")     → steer with follow-up
-read("task-name")                    → wait for completion, get output
-kill("task-name")                    → cleanup
+spawn(name, prompt, workdir)  → start session
+read(name)                    → wait for completion, get output
+send(name, text)              → steer with follow-up
+read(name)                    → wait for completion, get output
+kill(name)                    → cleanup
 ```
 
 ## Tips
 
-- Use `dangerouslySkipPermissions: true` for fully autonomous operation
-- User can attach manually: `tmux attach -t claude-<name>`
+- Attach manually: `tmux attach -t claude-<name>`
 - Always kill sessions when done to avoid orphaned processes
