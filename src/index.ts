@@ -56,8 +56,8 @@ async function waitForIdle(session: string): Promise<string> {
   const timeout = 600000; // 10 minutes
   const lines = 100; // Capture more lines to catch done signal
   const startTime = Date.now();
-  let lastOutput = "";
   let idleCount = 0;
+  let output = "";
 
   // Initial delay to let Claude start working
   await sleep(5000);
@@ -66,11 +66,10 @@ async function waitForIdle(session: string): Promise<string> {
     await sleep(2000);
 
     try {
-      const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
+      output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
 
       // If busy, reset idle count and continue polling
       if (isBusy(output)) {
-        lastOutput = output;
         idleCount = 0;
         continue;
       }
@@ -86,19 +85,18 @@ async function waitForIdle(session: string): Promise<string> {
       if (idleCount >= 2) {
         return filterUIChrome(output);
       }
-      lastOutput = output;
     } catch (e: any) {
       return `Error: ${e.message}`;
     }
   }
 
-  return `Timeout after 10 minutes. Session still running.\n\n${filterUIChrome(lastOutput)}`;
+  return `Timeout after 10 minutes. Session still running.\n\n${filterUIChrome(output)}`;
 }
 
 const server = new McpServer(
   {
     name: "claude-tmux",
-    version: "1.0.7",
+    version: "1.0.8",
   },
   {
     instructions: `# claude-tmux: Autonomous Claude Agents
