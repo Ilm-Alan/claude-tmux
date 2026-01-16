@@ -68,6 +68,7 @@ async function waitForIdle(session: string): Promise<string> {
   const startTime = Date.now();
   let lastOutput = "";
   let idleCount = 0;
+  let sawBusy = false; // Must see Claude working before we consider it idle
 
   while (Date.now() - startTime < timeout) {
     await sleep(2000);
@@ -75,23 +76,26 @@ async function waitForIdle(session: string): Promise<string> {
     try {
       const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
 
-      // If busy, reset idle count and keep waiting
+      // If busy, mark that we've seen Claude working and reset idle count
       if (isBusy(output)) {
+        sawBusy = true;
         lastOutput = output;
         idleCount = 0;
         continue;
       }
 
-      // Check for positive done signal
-      if (isDone(output)) {
+      // Check for positive done signal (only trust if we saw busy first)
+      if (isDone(output) && sawBusy) {
         return filterUIChrome(output);
       }
 
       // Not busy but no done signal - use settling delay
-      // Require 2 consecutive idle checks (4 seconds) before returning
-      idleCount++;
-      if (idleCount >= 2) {
-        return filterUIChrome(output);
+      // Only start counting idle after we've seen Claude working
+      if (sawBusy) {
+        idleCount++;
+        if (idleCount >= 2) {
+          return filterUIChrome(output);
+        }
       }
       lastOutput = output;
     } catch (e: any) {
