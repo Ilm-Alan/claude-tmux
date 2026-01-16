@@ -68,7 +68,9 @@ async function waitForIdle(session: string): Promise<string> {
   const startTime = Date.now();
   let lastOutput = "";
   let idleCount = 0;
-  let sawBusy = false; // Must see Claude working before we consider it idle
+
+  // Initial delay to let Claude start working
+  await sleep(5000);
 
   while (Date.now() - startTime < timeout) {
     await sleep(2000);
@@ -76,26 +78,23 @@ async function waitForIdle(session: string): Promise<string> {
     try {
       const output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
 
-      // If busy, mark that we've seen Claude working and reset idle count
+      // If busy, reset idle count and continue polling
       if (isBusy(output)) {
-        sawBusy = true;
         lastOutput = output;
         idleCount = 0;
         continue;
       }
 
-      // Check for positive done signal (only trust if we saw busy first)
-      if (isDone(output) && sawBusy) {
+      // Check for explicit done signal
+      if (isDone(output)) {
         return filterUIChrome(output);
       }
 
-      // Not busy but no done signal - use settling delay
-      // Only start counting idle after we've seen Claude working
-      if (sawBusy) {
-        idleCount++;
-        if (idleCount >= 2) {
-          return filterUIChrome(output);
-        }
+      // Not busy - count consecutive idle polls
+      // After 2 consecutive non-busy polls, consider done
+      idleCount++;
+      if (idleCount >= 2) {
+        return filterUIChrome(output);
       }
       lastOutput = output;
     } catch (e: any) {
@@ -109,7 +108,7 @@ async function waitForIdle(session: string): Promise<string> {
 const server = new McpServer(
   {
     name: "claude-tmux",
-    version: "1.0.5",
+    version: "1.0.6",
   },
   {
     instructions: `# claude-tmux: Autonomous Claude Agents
