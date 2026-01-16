@@ -66,16 +66,11 @@ kill("task-name")
 ## Usage Pattern
 
 ```
-spawn("task-name", workdir, prompt) → starts session
-read("task-name") → waits for completion, returns output
-kill("task-name") → cleanup
-```
-
-For steering mid-task:
-
-```
-send("task-name", "do something else")
-read("task-name") → waits for completion, returns output
+spawn("task-name", workdir, prompt)  → start session
+read("task-name")                    → wait for completion, get output
+send("task-name", "now do this")     → steer with follow-up
+read("task-name")                    → wait for completion, get output
+kill("task-name")                    → cleanup
 ```
 
 ## Tips
