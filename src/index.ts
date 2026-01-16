@@ -109,7 +109,7 @@ async function waitForIdle(session: string): Promise<string> {
 const server = new McpServer(
   {
     name: "claude-tmux",
-    version: "1.0.0",
+    version: "1.0.5",
   },
   {
     instructions: `# claude-tmux: Autonomous Claude Agents
