@@ -28,18 +28,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 function isBusy(output: string): boolean {
-  // Claude shows these patterns when actively working
-  const busyPatterns = [
-    'ctrl+c to interrupt',
-    'esc to interrupt',
-  ];
-
-  for (const pattern of busyPatterns) {
-    if (output.includes(pattern)) {
-      return true;
-    }
-  }
-  return false;
+  // Claude shows "(ctrl+c to interrupt" when actively working
+  return output.includes('(ctrl+c to interrupt');
 }
 
 function isDone(output: string): boolean {
@@ -108,7 +98,7 @@ async function waitForIdle(session: string): Promise<string> {
 const server = new McpServer(
   {
     name: "claude-tmux",
-    version: "1.0.6",
+    version: "1.0.7",
   },
   {
     instructions: `# claude-tmux: Autonomous Claude Agents
