@@ -75,4 +75,4 @@ kill(name)                    → cleanup
 ## Tips
 
 - Attach manually: `tmux attach -t claude-<name>`
-- Always kill sessions when done to avoid orphaned processes
+- Sessions persist until explicitly killed - only kill when the task is fully complete

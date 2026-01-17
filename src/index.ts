@@ -5,7 +5,13 @@ import { z } from "zod";
 import { execSync } from "child_process";
 import { writeFileSync } from "fs";
 
+// Constants
 const SESSION_PREFIX = "claude-";
+const TIMEOUT_MS = 900000;        // 15 minutes
+const POLL_INTERVAL_MS = 2000;    // 2 seconds
+const INITIAL_DELAY_MS = 5000;    // 5 seconds
+const CAPTURE_LINES = 100;
+const IDLE_THRESHOLD = 2;         // consecutive idle polls
 
 function runTmux(args: string): string {
   return execSync(`tmux ${args}`, { encoding: "utf-8", timeout: 10000 }).trim();
@@ -17,6 +23,18 @@ function runTmuxSafe(args: string): string | null {
   } catch {
     return null;
   }
+}
+
+function response(text: string) {
+  return { content: [{ type: "text" as const, text }] };
+}
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function sessionExists(session: string): boolean {
+  return runTmuxSafe(`has-session -t "${session}"`) !== null;
 }
 
 function sessionName(name: string): string {
@@ -53,20 +71,18 @@ function filterUIChrome(output: string): string {
 }
 
 async function waitForIdle(session: string): Promise<string> {
-  const timeout = 600000; // 10 minutes
-  const lines = 100; // Capture more lines to catch done signal
   const startTime = Date.now();
   let idleCount = 0;
   let output = "";
 
   // Initial delay to let Claude start working
-  await sleep(5000);
+  await sleep(INITIAL_DELAY_MS);
 
-  while (Date.now() - startTime < timeout) {
-    await sleep(2000);
+  while (Date.now() - startTime < TIMEOUT_MS) {
+    await sleep(POLL_INTERVAL_MS);
 
     try {
-      output = runTmux(`capture-pane -t "${session}" -p -S -${lines}`);
+      output = runTmux(`capture-pane -t "${session}" -p -S -${CAPTURE_LINES}`);
 
       // If busy, reset idle count and continue polling
       if (isBusy(output)) {
@@ -80,34 +96,27 @@ async function waitForIdle(session: string): Promise<string> {
       }
 
       // Not busy - count consecutive idle polls
-      // After 2 consecutive non-busy polls, consider done
       idleCount++;
-      if (idleCount >= 2) {
+      if (idleCount >= IDLE_THRESHOLD) {
         return filterUIChrome(output);
       }
-    } catch (e: any) {
-      return `Error: ${e.message}`;
+    } catch (e: unknown) {
+      return `Error: ${errorMessage(e)}`;
     }
   }
 
-  return `Timeout after 10 minutes. Session still running.\n\n${filterUIChrome(output)}`;
+  return `Timeout after 15 minutes. Session still running.\n\n${filterUIChrome(output)}`;
 }
 
 const server = new McpServer(
   {
     name: "claude-tmux",
-    version: "1.0.9",
+    version: "1.1.0",
   },
   {
     instructions: `# claude-tmux: Autonomous Claude Agents
 
 Spawn Claude Code instances in tmux sessions for long-running, independent tasks.
-
-## Tools
-- **spawn**: Start a new Claude session with a prompt.
-- **read**: Wait for a session to finish and return the output. You can continue other work while waiting.
-- **send**: Send a follow-up message to steer a running session mid-task.
-- **kill**: Terminate a session and clean up resources.
 
 ## Pattern
 
@@ -121,7 +130,7 @@ kill(name)                    → cleanup
 
 ## Tips
 - User can attach manually: \`tmux attach -t claude-<name>\`
-- Always kill sessions when done`,
+- Sessions persist until explicitly killed - only kill when the user asks or the task is fully complete`,
   }
 );
 
@@ -140,15 +149,15 @@ server.tool(
 
     try {
       runTmux(`new-session -d -s "${session}" -c "${workdir}"`);
-    } catch (e: any) {
-      return { content: [{ type: "text", text: `Error: ${e.message}` }] };
+    } catch (e: unknown) {
+      return response(`Error: ${errorMessage(e)}`);
     }
 
     const tempFile = `/tmp/claude-prompt-${session}.txt`;
     writeFileSync(tempFile, prompt);
     runTmux(`send-keys -t "${session}" 'claude --dangerously-skip-permissions "$(cat ${tempFile})" && rm ${tempFile}' Enter`);
 
-    return { content: [{ type: "text", text: `Started ${session}` }] };
+    return response(`Started ${session}`);
   }
 );
 
@@ -160,8 +169,11 @@ server.tool(
   },
   async ({ name }) => {
     const session = sessionName(name);
+    if (!sessionExists(session)) {
+      return response(`Session '${name}' does not exist`);
+    }
     const output = await waitForIdle(session);
-    return { content: [{ type: "text", text: output }] };
+    return response(output);
   }
 );
 
@@ -174,6 +186,9 @@ server.tool(
   },
   async ({ name, text }) => {
     const session = sessionName(name);
+    if (!sessionExists(session)) {
+      return response(`Session '${name}' does not exist`);
+    }
 
     try {
       const escaped = text
@@ -183,28 +198,48 @@ server.tool(
         .replace(/`/g, '\\`');
       runTmux(`send-keys -t "${session}" -l "${escaped}"`);
       runTmux(`send-keys -t "${session}" Enter`);
-      return { content: [{ type: "text", text: `Sent to ${session}` }] };
-    } catch (e: any) {
-      return { content: [{ type: "text", text: `Error: ${e.message}` }] };
+      return response(`Sent to ${session}`);
+    } catch (e: unknown) {
+      return response(`Error: ${errorMessage(e)}`);
     }
   }
 );
 
 server.tool(
   "kill",
-  "Terminate a Claude tmux session and clean up resources. Always kill sessions when done to avoid orphaned processes.",
+  "Terminate a Claude tmux session and clean up resources.",
   {
     name: z.string().describe("Session name (as provided to spawn)"),
   },
   async ({ name }) => {
     const session = sessionName(name);
+    if (!sessionExists(session)) {
+      return response(`Session '${name}' does not exist`);
+    }
 
     try {
       runTmux(`kill-session -t "${session}"`);
-      return { content: [{ type: "text", text: `Killed ${session}` }] };
-    } catch (e: any) {
-      return { content: [{ type: "text", text: `Error: ${e.message}` }] };
+      return response(`Killed ${session}`);
+    } catch (e: unknown) {
+      return response(`Error: ${errorMessage(e)}`);
     }
+  }
+);
+
+server.tool(
+  "list",
+  "List all active Claude tmux sessions.",
+  {},
+  async () => {
+    const output = runTmuxSafe(`list-sessions -F "#{session_name}"`) ?? "";
+    const sessions = output.split('\n')
+      .filter(s => s.startsWith(SESSION_PREFIX))
+      .map(s => s.slice(SESSION_PREFIX.length));
+
+    if (sessions.length === 0) {
+      return response("No active sessions");
+    }
+    return response(sessions.join('\n'));
   }
 );
 
