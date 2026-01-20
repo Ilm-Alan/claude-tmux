@@ -132,7 +132,7 @@ Spawn Claude Code instances in tmux sessions for long-running tasks.
 
 server.tool(
   "spawn",
-  "Launch a new Claude Code instance in a tmux session. Creates an interactive session you can communicate with via send/read. The session runs until killed. Use for multi-turn conversations or tasks requiring steering.",
+  "Start a Claude Code instance in a tmux session.",
   {
     name: z.string().min(1).max(50).describe("Unique session name (e.g., 'refactor-auth', 'debug-api')"),
     prompt: z.string().describe("Initial prompt to send to Claude on startup"),
@@ -159,7 +159,7 @@ server.tool(
 
 server.tool(
   "read",
-  "Wait for a Claude session to finish working and return the terminal output. You can continue other work while waiting.",
+  "Wait for a session to finish and return output.",
   {
     name: z.string().describe("Session name (as provided to spawn)"),
   },
@@ -175,7 +175,7 @@ server.tool(
 
 server.tool(
   "send",
-  "Send a follow-up message to a running Claude session. Use to steer the session mid-task or provide additional instructions. Call read afterwards to get the result.",
+  "Send a message to a running session.",
   {
     name: z.string().describe("Session name (as provided to spawn)"),
     text: z.string().describe("Message to send to Claude"),
@@ -203,7 +203,7 @@ server.tool(
 
 server.tool(
   "kill",
-  "Terminate a Claude tmux session and clean up resources.",
+  "Terminate a session.",
   {
     name: z.string().describe("Session name (as provided to spawn)"),
   },
@@ -224,7 +224,7 @@ server.tool(
 
 server.tool(
   "list",
-  "List all active Claude tmux sessions.",
+  "List active sessions.",
   {},
   async () => {
     const output = runTmuxSafe(`list-sessions -F "#{session_name}"`) ?? "";
