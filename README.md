@@ -54,6 +54,14 @@ Send a follow-up message to a running Claude session.
 send("task-name", "do something else")
 ```
 
+### list
+
+List all active Claude tmux sessions. Useful for discovery across conversations.
+
+```
+list()
+```
+
 ### kill
 
 Terminate a Claude tmux session and clean up resources.
