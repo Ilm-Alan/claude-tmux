@@ -9,7 +9,7 @@ import { writeFileSync } from "fs";
 const SESSION_PREFIX = "claude-";
 const TIMEOUT_MS = 900000;        // 15 minutes
 const POLL_INTERVAL_MS = 2000;    // 2 seconds
-const INITIAL_DELAY_MS = 5000;    // 5 seconds
+const INITIAL_DELAY_MS = 10000;   // 10 seconds
 const CAPTURE_LINES = 100;
 const IDLE_THRESHOLD = 5;         // consecutive idle polls
 
