@@ -114,9 +114,9 @@ const server = new McpServer(
     version: "1.1.0",
   },
   {
-    instructions: `# claude-tmux: Autonomous Claude Agents
+    instructions: `# claude-tmux
 
-Spawn Claude Code instances in tmux sessions for long-running, independent tasks.
+Spawn Claude Code instances in tmux sessions for long-running tasks.
 
 ## Tools
 - **spawn**: Start a new Claude session with a prompt.
@@ -126,8 +126,7 @@ Spawn Claude Code instances in tmux sessions for long-running, independent tasks
 - **kill**: Terminate a session.
 
 ## Tips
-- Verify output shows task completion before killing. Idle agents are fine to leave running.
-- User can attach manually: \`tmux attach -t claude-<name>\``,
+- Verify completion before killing. Idle sessions are fine.`,
   }
 );
 
