@@ -1,6 +1,6 @@
 {
   "name": "claude-tmux",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "MCP server for orchestrating multiple Claude Code instances via tmux",
   "type": "module",
   "main": "dist/index.js",

@@ -121,7 +121,7 @@ Spawn Claude Code instances in tmux sessions for long-running, independent tasks
 ## Tools
 - **spawn**: Start a new Claude session with a prompt.
 - **read**: Wait for a session to finish and return output.
-- **send**: Send a follow-up message mid-task. Call read after.
+- **send**: Send a follow-up message to a session.
 - **list**: List active sessions.
 - **kill**: Terminate a session.
 
