@@ -56,7 +56,7 @@ send("task-name", "do something else")
 
 ### list
 
-List all active Claude tmux sessions. Useful for discovery across conversations.
+List all active Claude tmux sessions.
 
 ```
 list()
