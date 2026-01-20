@@ -11,7 +11,7 @@ const TIMEOUT_MS = 900000;        // 15 minutes
 const POLL_INTERVAL_MS = 2000;    // 2 seconds
 const INITIAL_DELAY_MS = 5000;    // 5 seconds
 const CAPTURE_LINES = 100;
-const IDLE_THRESHOLD = 2;         // consecutive idle polls
+const IDLE_THRESHOLD = 5;         // consecutive idle polls
 
 function runTmux(args: string): string {
   return execSync(`tmux ${args}`, { encoding: "utf-8", timeout: 10000 }).trim();
@@ -118,19 +118,15 @@ const server = new McpServer(
 
 Spawn Claude Code instances in tmux sessions for long-running, independent tasks.
 
-## Pattern
-
-\`\`\`
-spawn(name, prompt, workdir)  → start session
-read(name)                    → wait for completion, get output
-send(name, text)              → steer with follow-up
-read(name)                    → wait for completion, get output
-kill(name)                    → cleanup
-\`\`\`
+## Tools
+- **spawn**: Start a new Claude session with a prompt.
+- **read**: Wait for a session to finish and return output.
+- **send**: Send a follow-up message mid-task. Call read after.
+- **kill**: Terminate a session.
 
 ## Tips
-- User can attach manually: \`tmux attach -t claude-<name>\`
-- Sessions persist until explicitly killed - only kill when the user asks or the task is fully complete`,
+- Verify output shows task completion before killing. Idle agents are fine to leave running.
+- User can attach manually: \`tmux attach -t claude-<name>\``,
   }
 );
 

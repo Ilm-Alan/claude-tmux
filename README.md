@@ -74,5 +74,5 @@ kill(name)                    → cleanup
 
 ## Tips
 
+- Verify output shows task completion before killing. Idle agents are fine to leave running.
 - Attach manually: `tmux attach -t claude-<name>`
-- Sessions persist until explicitly killed - only kill when the task is fully complete
