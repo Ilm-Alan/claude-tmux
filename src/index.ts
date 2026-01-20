@@ -160,7 +160,7 @@ server.tool(
 
 server.tool(
   "read",
-  "Wait for a session to finish and return output.",
+  "Wait for a Claude session to finish working and return the terminal output. You can continue other work while waiting.",
   {
     name: z.string().describe("Session name (as provided to spawn)"),
   },
