@@ -52,8 +52,9 @@ function isBusy(output: string): boolean {
 
 function isDone(output: string): boolean {
   // Claude shows "✻ [verb] for [duration]" when task completes
-  // e.g., "✻ Baked for 1m 35s", "✻ Cogitated for 2m 10s"
-  return /✻\s+\w+\s+for\s+\d+[ms]/.test(output);
+  // e.g., "✻ Baked for 1m 35s", "✻ Sautéed for 2m 10s"
+  // Use \S+ instead of \w+ to support Unicode characters like é
+  return /✻\s+\S+\s+for\s+\d+[ms]/.test(output);
 }
 
 function filterUIChrome(output: string): string {
