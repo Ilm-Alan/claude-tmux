@@ -152,7 +152,7 @@ server.tool(
 
     const tempFile = `/tmp/claude-prompt-${session}.txt`;
     writeFileSync(tempFile, prompt);
-    runTmux(`send-keys -t "${session}" 'claude --dangerously-skip-permissions "$(cat ${tempFile})" && rm ${tempFile}' Enter`);
+    runTmux(`send-keys -t "${session}" 'cat ${tempFile} | claude --dangerously-skip-permissions && rm ${tempFile}' Enter`);
 
     return response(`Started ${session}`);
   }
