@@ -11,6 +11,7 @@ const TIMEOUT_MS = 900000;        // 15 minutes
 const POLL_INTERVAL_MS = 2000;    // 2 seconds
 const INITIAL_DELAY_MS = 10000;   // 10 seconds
 const CAPTURE_LINES = 100;
+const STABLE_COUNT_THRESHOLD = 5; // 5 polls * 2s = 10 seconds of no change
 function runTmux(args: string): string {
   return execSync(`tmux ${args}`, { encoding: "utf-8", timeout: 10000 }).trim();
 }
@@ -64,21 +65,44 @@ function isIdle(output: string): boolean {
 
 function filterUIChrome(output: string): string {
   const lines = output.split('\n');
-  const filtered = lines.filter(line => {
-    const trimmed = line.trim();
-    if (/^[─━\-]{10,}$/.test(trimmed)) return false;
-    if (trimmed.startsWith('> Try "')) return false;
-    if (trimmed.includes('bypass permissions on')) return false;
-    if (trimmed.includes('↵ send')) return false;
-    if (trimmed.includes('shift+tab to cycle')) return false;
-    return true;
-  });
-  return filtered.join('\n').trim();
+
+  // Find horizontal rules from the bottom
+  const ruleIndices: number[] = [];
+  for (let i = lines.length - 1; i >= 0 && ruleIndices.length < 2; i--) {
+    if (/^[─━\-]{10,}$/.test(lines[i].trim())) {
+      ruleIndices.push(i);
+    }
+  }
+
+  // Cut at second-to-last rule, then append context tracker
+  const cutoff = ruleIndices.length >= 2 ? ruleIndices[1] : lines.length;
+  const content = lines.slice(0, cutoff);
+
+  // Context tracker is second-to-last non-empty line from the bottom
+  const nonEmptyLines = lines.filter(l => l.trim());
+  if (nonEmptyLines.length >= 2) {
+    content.push(nonEmptyLines[nonEmptyLines.length - 2]);
+  }
+
+  return content.join('\n').trim();
 }
 
 async function waitForIdle(session: string): Promise<string> {
   const startTime = Date.now();
   let output = "";
+  let previousOutput = "";
+  let stableCount = 0;
+
+  // Check immediately if already idle (allows completed sessions to return fast)
+  try {
+    output = runTmux(`capture-pane -t "${session}" -p -S -${CAPTURE_LINES}`);
+    if (isIdle(output)) {
+      return filterUIChrome(output);
+    }
+    previousOutput = output;
+  } catch (e: unknown) {
+    return `Error: ${errorMessage(e)}`;
+  }
 
   // Initial delay to let Claude start working
   await sleep(INITIAL_DELAY_MS);
@@ -89,8 +113,20 @@ async function waitForIdle(session: string): Promise<string> {
     try {
       output = runTmux(`capture-pane -t "${session}" -p -S -${CAPTURE_LINES}`);
 
+      // Check for explicit done indicator
       if (isIdle(output)) {
         return filterUIChrome(output);
+      }
+
+      // Stability check: if output unchanged, increment counter
+      if (output === previousOutput) {
+        stableCount++;
+        if (stableCount >= STABLE_COUNT_THRESHOLD) {
+          return filterUIChrome(output);
+        }
+      } else {
+        stableCount = 0;
+        previousOutput = output;
       }
     } catch (e: unknown) {
       return `Error: ${errorMessage(e)}`;
@@ -112,13 +148,14 @@ Spawn Claude Code instances in tmux sessions for long-running tasks.
 
 ## Tools
 - **spawn**: Start a new Claude session with a prompt.
-- **read**: Wait for a session to finish and return output.
+- **read**: Wait for sessions to finish. Use \`names\` array for parallel waiting on multiple sessions.
 - **send**: Send a follow-up message to a session.
 - **list**: List active sessions.
 - **kill**: Terminate a session.
 
 ## Tips
-- Verify completion before killing. Idle sessions are fine.`,
+- Verify completion before killing. Idle sessions are fine.
+- For multiple sessions, use \`read(names: ["a", "b", "c"])\` to wait in parallel.`,
   }
 );
 
@@ -151,17 +188,40 @@ server.tool(
 
 server.tool(
   "read",
-  "Wait for a Claude session to finish working and return the terminal output. You can continue other work while waiting.",
+  "Wait for Claude sessions to finish working and return their terminal output. Use 'names' for parallel waiting on multiple sessions.",
   {
-    name: z.string().describe("Session name (as provided to spawn)"),
+    name: z.string().optional().describe("Session name (as provided to spawn)"),
+    names: z.array(z.string()).optional().describe("Multiple session names for parallel waiting (preferred for multiple sessions)"),
   },
-  async ({ name }) => {
-    const session = sessionName(name);
-    if (!sessionExists(session)) {
-      return response(`Session '${name}' does not exist`);
+  async ({ name, names }) => {
+    // Handle multiple sessions in parallel
+    const sessionNames = names && names.length > 0 ? names : name ? [name] : [];
+
+    if (sessionNames.length === 0) {
+      return response("Error: Provide either 'name' or 'names'");
     }
-    const output = await waitForIdle(session);
-    return response(output);
+
+    const results = await Promise.all(
+      sessionNames.map(async (n) => {
+        const session = sessionName(n);
+        if (!sessionExists(session)) {
+          return { name: n, output: `Session '${n}' does not exist` };
+        }
+        const output = await waitForIdle(session);
+        return { name: n, output };
+      })
+    );
+
+    // If single session, return just the output (backwards compatible)
+    if (results.length === 1) {
+      return response(results[0].output);
+    }
+
+    // Multiple sessions: format with headers
+    const formatted = results
+      .map(r => `=== ${r.name} ===\n${r.output}`)
+      .join('\n\n');
+    return response(formatted);
   }
 );
 
