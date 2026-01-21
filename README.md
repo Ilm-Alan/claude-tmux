@@ -40,11 +40,14 @@ spawn(name, prompt, workdir)
 
 ### read
 
-Wait for a Claude session to finish working and return the terminal output.
+Wait for Claude sessions to finish working and return terminal output.
 
 ```
-read("task-name")
+read(name: "task-name")           // single session
+read(names: ["a", "b", "c"])      // parallel wait on multiple sessions
 ```
+
+For multiple sessions, use `names` to wait in parallel - returns all outputs when all complete.
 
 ### send
 
@@ -76,9 +79,25 @@ kill("task-name")
 spawn(name, prompt, workdir)  → start session
 read(name)                    → wait for completion, get output
 send(name, text)              → steer with follow-up
-read(name)                    → wait for completion, get output
+read(name)                    → wait again
 kill(name)                    → cleanup
 ```
+
+For parallel tasks:
+```
+spawn("task-a", ...)
+spawn("task-b", ...)
+spawn("task-c", ...)
+read(names: ["task-a", "task-b", "task-c"])  → wait for all
+```
+
+## Idle Detection
+
+`read` detects completion via:
+1. **Done indicator** - Claude's status line showing `✻ model for Xm`
+2. **Stability** - Output unchanged for 10 seconds (handles sub-minute tasks that don't show the indicator)
+
+Timeout is 15 minutes.
 
 ## Tips
 
