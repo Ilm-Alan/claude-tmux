@@ -11,8 +11,6 @@ const TIMEOUT_MS = 900000;        // 15 minutes
 const POLL_INTERVAL_MS = 2000;    // 2 seconds
 const INITIAL_DELAY_MS = 10000;   // 10 seconds
 const CAPTURE_LINES = 100;
-const IDLE_THRESHOLD = 5;         // consecutive idle polls
-
 function runTmux(args: string): string {
   return execSync(`tmux ${args}`, { encoding: "utf-8", timeout: 10000 }).trim();
 }
@@ -45,16 +43,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function isBusy(output: string): boolean {
-  // Claude shows "(ctrl+c to interrupt" when actively working
-  return output.includes('(ctrl+c to interrupt');
-}
+function isIdle(output: string): boolean {
+  const lines = output.split('\n');
 
-function isDone(output: string): boolean {
-  // Claude shows "✻ [verb] for [duration]" when task completes
-  // e.g., "✻ Baked for 1m 35s", "✻ Sautéed for 2m 10s"
-  // Use \S+ instead of \w+ to support Unicode characters like é
-  return /✻\s+\S+\s+for\s+\d+[ms]/.test(output);
+  let lastDoneLine = -1;
+  let lastWorkingLine = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (/✻\s+\S+\s+for\s+\d+[ms]/.test(lines[i])) {
+      lastDoneLine = i;
+    }
+    if (lines[i].includes('ctrl+c to interrupt')) {
+      lastWorkingLine = i;
+    }
+  }
+
+  // Idle only if done message exists and is below any working indicator
+  return lastDoneLine > lastWorkingLine;
 }
 
 function filterUIChrome(output: string): string {
@@ -73,7 +78,6 @@ function filterUIChrome(output: string): string {
 
 async function waitForIdle(session: string): Promise<string> {
   const startTime = Date.now();
-  let idleCount = 0;
   let output = "";
 
   // Initial delay to let Claude start working
@@ -85,20 +89,7 @@ async function waitForIdle(session: string): Promise<string> {
     try {
       output = runTmux(`capture-pane -t "${session}" -p -S -${CAPTURE_LINES}`);
 
-      // If busy, reset idle count and continue polling
-      if (isBusy(output)) {
-        idleCount = 0;
-        continue;
-      }
-
-      // Check for explicit done signal
-      if (isDone(output)) {
-        return filterUIChrome(output);
-      }
-
-      // Not busy - count consecutive idle polls
-      idleCount++;
-      if (idleCount >= IDLE_THRESHOLD) {
+      if (isIdle(output)) {
         return filterUIChrome(output);
       }
     } catch (e: unknown) {
